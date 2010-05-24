@@ -22,7 +22,7 @@ module Delayed
         
         key :priority,    Integer, :default => 0
         key :attempts,    Integer, :default => 0
-        key :handler,     String
+        key :handler,     String, :index => true # For looking up duplicates
         key :run_at,      Time
         key :locked_at,   Time
         key :locked_by,   String, :index => true
@@ -50,7 +50,7 @@ module Delayed
           right_now = db_time_now
 
           conditions = {
-            :run_at => {"$lte" => right_now},
+            :run_at.lte => right_now,
             :failed_at => nil,
             :limit => -limit, # In mongo, positive limits are 'soft' and negative are 'hard'
             :sort => [['priority', 1], ['run_at', 1]]
@@ -61,7 +61,6 @@ module Delayed
 
           # Nested "$or"s arent't supported yet, so let's do this in two passes still
           results = all(conditions.merge("$or" => [{:locked_at => nil}, {:locked_at => {"$lt" => right_now - max_run_time}}]))
-          # results = all(conditions.merge("$or" => [{:locked_at => nil}, {:locked_at.lt => (right_now - max_run_time)}]))
           results += all(conditions.merge({:locked_by => worker_name})) if results.size < limit
           results
         end
